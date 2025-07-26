@@ -54,5 +54,17 @@
   background-color: transparent !important;
   fill: white !important;
 }
+/* globals.css */
+.illustration-image {
+  transition: all 0.3s ease-in-out;
+}
+
+/* ✅ This only applies when dark mode is on */
+.dark .illustration-image {
+  filter: brightness(0.9) contrast(1.2) saturate(1.1);
+}
+
+
+
 
 
