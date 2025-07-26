@@ -1,26 +1,58 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* === react-phone-input-2 Dark Mode Fixes === */
+
+.dark .react-tel-input {
+  background-color: #1f2937 !important; /* Tailwind gray-800 */
+  color: white !important;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.dark .react-tel-input input {
+  background-color: #1f2937 !important;
+  color: white !important;
+  border: 1px solid #374151 !important; /* Tailwind gray-700 */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark .react-tel-input .flag-dropdown {
+  background-color: #1f2937 !important;
+  border-right: 1px solid #374151 !important;
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.dark .react-tel-input .selected-flag {
+  background-color: #1f2937 !important;
 }
+
+.dark .react-tel-input .country-list {
+  background-color: #1f2937 !important;
+  color: white !important;
+}
+
+.dark .react-tel-input .country-list .country {
+  color: white !important;
+}
+
+.dark .react-tel-input .country-list .country:hover {
+  background-color: #374151 !important; /* Tailwind gray-700 */
+}
+/* 💀 Kill white strip behind search bar */
+.dark .react-tel-input .search-box {
+  background-color: #111827 !important; /* Tailwind gray-900 */
+  border: none !important;
+}
+
+.dark .react-tel-input .search-box input {
+  background-color: transparent !important;
+  color: white !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.dark .react-tel-input .search-box .search {
+  background-color: transparent !important;
+  fill: white !important;
+}
+
+
