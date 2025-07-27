@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import ShinyText from "../components/ShinyText";
 import "./globals.css";
 import LightRays from "../components/LightRays";
@@ -8,45 +8,88 @@ import Navbar from "../components/Navbar";
 import dynamic from "next/dynamic";
 
 // Dynamically import MapComponent
+// HomePage.js should ONLY import the dynamic wrapper for MapComponent
 const DynamicMapComponent = dynamic(
   () => import("../components/MapComponent"),
-  { ssr: false }
+  { ssr: false } // Crucial: This component will not be rendered on the server
 );
 
-// Simulated Geocoding Data (Replace with a real API call for production)
-const ALL_LOCATIONS = [
-  "Raipur, Chhattisgarh, India",
-  "Nagpur, Maharashtra, India",
-  "Bhilai, Chhattisgarh, India",
-  "Durg, Chhattisgarh, India",
-  "Bilaspur, Chhattisgarh, India",
-  "Delhi, India",
-  "Mumbai, Maharashtra, India",
-  "Bangalore, Karnataka, India",
-  "Hyderabad, Telangana, India",
-  "Chennai, Tamil Nadu, India",
-  "Kolkata, West Bengal, India",
-  "Amanaka, Raipur, Chhattisgarh, India",
-  "Aman Men's Parlour, Amanaka, Raipur, Chhattisgarh, India",
-  "Amantran Beauty Parlour, Recreation Rd, Jain Mandir Galli, Choubey Colony, Ramkund, Raipur, Chhattisgarh, India",
-];
+// Removed ALL_LOCATIONS as we will fetch dynamically
 
 export default function HomePage() {
-  const [pickupLocation, setPickupLocation] = useState(null); // Stores {lat, lng} object for pickup
-  const [pickupLocationText, setPickupLocationText] = useState(""); // Stores display text for pickup
+  const [pickupLocation, setPickupLocation] = useState(null);
+  const [pickupLocationText, setPickupLocationText] = useState("");
   const [pickupSuggestions, setPickupSuggestions] = useState([]);
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false);
 
-  const [dropoffLocation, setDropoffLocation] = useState(null); // Stores {lat, lng} object for dropoff
-  const [dropoffLocationText, setDropoffLocationText] = useState(""); // Stores display text for dropoff
+  const [dropoffLocation, setDropoffLocation] = useState(null);
+  const [dropoffLocationText, setDropoffLocationText] = useState("");
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
   const [showDropoffSuggestions, setShowDropoffSuggestions] = useState(false);
 
-  // State to track which input is active for map selection
-  const [activeLocationInput, setActiveLocationInput] = useState('pickup'); // 'pickup' or 'dropoff'
+  const [activeLocationInput, setActiveLocationInput] = useState('pickup');
 
   const pickupInputRef = useRef(null);
   const dropoffInputRef = useRef(null);
+
+  // Debounce function (reusable)
+  const debounce = (func, delay) => {
+    let timeout;
+    return function(...args) {
+      const context = this;
+      clearTimeout(timeout);
+      timeout = setTimeout(() => func.apply(context, args), delay);
+    };
+  };
+
+  // Function to perform geocoding search
+  const performSearch = useCallback(async (query, setSuggestions, currentLocation = null) => {
+    if (query.length < 3) { // Only search if query is at least 3 characters
+      setSuggestions([]);
+      return;
+    }
+    try {
+      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=in`;
+
+      // If a current location is available, add viewbox parameters for prioritization
+      if (currentLocation && typeof currentLocation.lat === 'number' && typeof currentLocation.lng === 'number') {
+        // Create a small bounding box around the current location for prioritization
+        // Adjust these values (e.g., 0.1) to control the size of the prioritization area
+        const delta = 0.1; // Approximately 11km for lat/lng
+        const minLat = currentLocation.lat - delta;
+        const maxLat = currentLocation.lat + delta;
+        const minLng = currentLocation.lng - delta;
+        const maxLng = currentLocation.lng + delta;
+        // Nominatim viewbox format: min_lon,min_lat,max_lon,max_lat
+        apiUrl += `&viewbox=${minLng},${minLat},${maxLng},${maxLat}`;
+        // Note: 'bounded=1' would strictly limit results to the viewbox,
+        // but often just 'viewbox' as a hint is better for suggestions.
+      }
+
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+      const newSuggestions = data.map(item => item.display_name);
+      setSuggestions(newSuggestions);
+    } catch (error) {
+      console.error("Geocoding search failed:", error);
+      setSuggestions([]); // Clear suggestions on error
+    }
+  }, []);
+
+  // Helper for debounced search, wraps performSearch
+  // MOVED THIS DECLARATION UP
+  const debouncedSearch = useCallback(debounce(performSearch, 500), [performSearch]);
+
+  // Debounced versions of the search functions
+  // Now debouncedSearch is defined before these use it
+  const debouncedPickupSearch = useCallback((query, setSuggestions) => {
+    debouncedSearch(query, setSuggestions, pickupLocation);
+  }, [debouncedSearch, pickupLocation]); // Depend on debouncedSearch
+
+  const debouncedDropoffSearch = useCallback((query, setSuggestions) => {
+    debouncedSearch(query, setSuggestions, pickupLocation);
+  }, [debouncedSearch, pickupLocation]); // Depend on debouncedSearch
+
 
   // Unified function to handle location selection from map/geolocation
   const handleLocationSelectedFromMap = async (type, location) => {
@@ -57,13 +100,13 @@ export default function HomePage() {
       latLng = location;
     } else {
       console.warn("Invalid location format received:", location);
-      return; // Exit if location is invalid
+      return;
     }
 
-    // --- REVERSE GEOCODING INTEGRATION POINT ---
     let addressText = `Lat: ${latLng.lat.toFixed(4)}, Lng: ${latLng.lng.toFixed(4)}`;
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.lat}&lon=${latLng.lng}&zoom=18&addressdetails=1`);
+      // Added countrycodes=in for reverse geocoding as well, for consistency
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.lat}&lon=${latLng.lng}&zoom=18&addressdetails=1&countrycodes=in`);
       const data = await response.json();
       if (data && data.display_name) {
         addressText = data.display_name;
@@ -71,7 +114,6 @@ export default function HomePage() {
     } catch (error) {
       console.error("Reverse geocoding failed:", error);
     }
-    // --- END REVERSE GEOCODING ---
 
     if (type === 'pickup') {
       setPickupLocation(latLng);
@@ -88,55 +130,64 @@ export default function HomePage() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
-          handleLocationSelectedFromMap('pickup', newLocation); // Set initial pickup
+          handleLocationSelectedFromMap('pickup', newLocation);
         },
         (error) => {
           console.error("Geolocation error:", error);
-          // Fallback to default if geo fails, but still set a default text
           setPickupLocationText("Getting current location or click on map...");
         }
       );
     }
-  }, []); // Empty dependency array to run only once on mount
+  }, []);
 
   // --- Pickup Location Search Handlers ---
   const handlePickupTextChange = (e) => {
     const value = e.target.value;
-    setPickupLocationText(value); // Update input text directly
+    setPickupLocationText(value);
     setPickupLocation(null); // Clear map location when typing
 
+    debouncedPickupSearch(value, setPickupSuggestions); // Pass pickupLocation implicitly via useCallback
     if (value.length > 2) {
-      const filteredSuggestions = ALL_LOCATIONS.filter(location =>
-        location.toLowerCase().includes(value.toLowerCase())
-      );
-      setPickupSuggestions(filteredSuggestions);
       setShowPickupSuggestions(true);
     } else {
-      setPickupSuggestions([]);
       setShowPickupSuggestions(false);
+      setPickupSuggestions([]); // Clear suggestions immediately if query is too short
+      if (value.length === 0) {
+        setPickupLocation(null);
+      }
     }
   };
 
   const handlePickupSuggestionClick = async (suggestion) => {
-    setPickupLocationText(suggestion); // Set input text to selected suggestion
+    setPickupLocationText(suggestion);
     setPickupSuggestions([]);
     setShowPickupSuggestions(false);
 
-    // --- FORWARD GEOCODING INTEGRATION POINT ---
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1`);
+      // Also add viewbox to this specific geocoding call for consistency
+      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1&countrycodes=in`;
+      if (pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number') {
+        const delta = 0.1;
+        const minLat = pickupLocation.lat - delta;
+        const maxLat = pickupLocation.lat + delta;
+        const minLng = pickupLocation.lng - delta;
+        const maxLng = pickupLocation.lng + delta;
+        apiUrl += `&viewbox=${minLng},${minLat},${maxLng},${maxLat}`;
+      }
+
+      const response = await fetch(apiUrl);
       const data = await response.json();
       if (data && data.length > 0) {
         const latLng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
         setPickupLocation(latLng);
       } else {
-        setPickupLocation(null); // No coordinates found for this suggestion
+        setPickupLocation(null);
+        console.warn("No coordinates found for pickup suggestion:", suggestion);
       }
     } catch (error) {
       console.error("Forward geocoding failed for pickup:", error);
       setPickupLocation(null);
     }
-    // --- END FORWARD GEOCODING ---
   };
 
   // --- Dropoff Location Search Handlers ---
@@ -145,15 +196,15 @@ export default function HomePage() {
     setDropoffLocationText(value);
     setDropoffLocation(null); // Clear map location when typing
 
+    debouncedDropoffSearch(value, setDropoffSuggestions); // Pass pickupLocation implicitly via useCallback
     if (value.length > 2) {
-      const filteredSuggestions = ALL_LOCATIONS.filter(location =>
-        location.toLowerCase().includes(value.toLowerCase())
-      );
-      setDropoffSuggestions(filteredSuggestions);
       setShowDropoffSuggestions(true);
     } else {
-      setDropoffSuggestions([]);
       setShowDropoffSuggestions(false);
+      setDropoffSuggestions([]); // Clear suggestions immediately if query is too short
+      if (value.length === 0) {
+        setDropoffLocation(null);
+      }
     }
   };
 
@@ -162,21 +213,31 @@ export default function HomePage() {
     setDropoffSuggestions([]);
     setShowDropoffSuggestions(false);
 
-    // --- FORWARD GEOCODING INTEGRATION POINT ---
     try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1`);
+      // Also add viewbox to this specific geocoding call for consistency
+      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1&countrycodes=in`;
+      if (pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number') {
+        const delta = 0.1;
+        const minLat = pickupLocation.lat - delta;
+        const maxLat = pickupLocation.lat + delta;
+        const minLng = pickupLocation.lng - delta;
+        const maxLng = pickupLocation.lng + delta;
+        apiUrl += `&viewbox=${minLng},${minLat},${maxLng},${maxLat}`;
+      }
+
+      const response = await fetch(apiUrl);
       const data = await response.json();
       if (data && data.length > 0) {
         const latLng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
         setDropoffLocation(latLng);
       } else {
-        setDropoffLocation(null); // No coordinates found for this suggestion
+        setDropoffLocation(null);
+        console.warn("No coordinates found for dropoff suggestion:", suggestion);
       }
     } catch (error) {
       console.error("Forward geocoding failed for dropoff:", error);
       setDropoffLocation(null);
     }
-    // --- END FORWARD GEOCODING ---
   };
 
   // Close suggestions when clicking outside the input/suggestions
@@ -195,7 +256,6 @@ export default function HomePage() {
     };
   }, []);
 
-
   const handleBookRide = (e) => {
     e.preventDefault();
     if (!pickupLocation || !dropoffLocation) {
@@ -205,7 +265,6 @@ export default function HomePage() {
     console.log("Booking ride from:", pickupLocationText, "to:", dropoffLocationText);
     console.log("Pickup Coords:", pickupLocation);
     console.log("Dropoff Coords:", dropoffLocation);
-    // Here you would integrate with your backend to book the ride
   };
 
   return (
@@ -254,7 +313,7 @@ export default function HomePage() {
                     placeholder="Pickup location (Type or click on map)"
                     value={pickupLocationText}
                     onChange={handlePickupTextChange}
-                    onFocus={() => { setActiveLocationInput('pickup'); setShowPickupSuggestions(true); }} // Set active input on focus
+                    onFocus={() => { setActiveLocationInput('pickup'); setShowPickupSuggestions(true); }}
                     className="w-full px-4 py-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 text-black dark:text-white bg-white dark:bg-gray-900 rounded-lg border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
                   {showPickupSuggestions && pickupSuggestions.length > 0 && (
@@ -277,7 +336,7 @@ export default function HomePage() {
                     placeholder="Dropoff location"
                     value={dropoffLocationText}
                     onChange={handleDropoffTextChange}
-                    onFocus={() => { setActiveLocationInput('dropoff'); setShowDropoffSuggestions(true); }} // Set active input on focus
+                    onFocus={() => { setActiveLocationInput('dropoff'); setShowDropoffSuggestions(true); }}
                     className="w-full px-4 py-3 placeholder:text-gray-500 dark:placeholder:text-gray-400 text-black dark:text-white bg-white dark:bg-gray-900 rounded-lg border border-gray-300 dark:border-gray-700 focus:outline-none focus:ring-2 focus:ring-yellow-400"
                   />
                   {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
