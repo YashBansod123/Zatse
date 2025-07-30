@@ -4,9 +4,16 @@ import React from 'react';
 import Navbar from "../../components/Navbar";
 import LightRays from "../../components/LightRays";
 import ShinyText from "../../components/ShinyText";
-
+import { useRouter } from 'next/navigation'; // Assuming you are using Next.js routing
 export default function DriverPage() {
+  const router = useRouter();
+  const handleSignUp = () => {
+    // Navigate to the driver registration form or sign-up page
+    router.push('/driver/vehicle-selection');
+  };
+
   return (
+    
     // This structure is based on your HomePage.js
     // 'relative' creates the container for the absolute layers.
     <main className="min-h-screen relative bg-black">
@@ -82,7 +89,7 @@ export default function DriverPage() {
             </div>
 
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-6">Ready to Drive?</h2>
-            <button className="bg-yellow-500 text-black py-4 px-8 rounded-full font-semibold text-xl hover:bg-black hover:text-white transition transform hover:scale-105 shadow-lg">
+            <button  onClick={handleSignUp} className="bg-yellow-500 text-black py-4 px-8 rounded-full font-semibold text-xl hover:bg-black hover:text-white transition transform hover:scale-105 shadow-lg">
               Sign Up to Drive
             </button>
             <p className="text-sm text-gray-400 mt-4">
