@@ -86,6 +86,7 @@ export default function DocumentUploadPage() {
     } finally {
       setLoading(false);
     }
+    router.push('/driver/verification-pending'); // Navigate to vehicle selection page after submission
   };
 
   return (
