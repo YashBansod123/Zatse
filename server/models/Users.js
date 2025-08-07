@@ -1,11 +1,6 @@
-// const mongoose = require('mongoose');
 
-// const userSchema = new mongoose.Schema({
-//   phone: { type: String, required: true, unique: true },
-// }, { timestamps: true });
-
-// module.exports = mongoose.model('User', userSchema);
 const mongoose = require('mongoose');
+const Vehicle = require('./Vehicle');
 
 const UserSchema = new mongoose.Schema({
   phone: {
@@ -31,6 +26,11 @@ const UserSchema = new mongoose.Schema({
     sparse: true, // Allows multiple documents to have a null or empty string value for a unique field
     trim: true,
     lowercase: true,
+  },
+  Vehicle: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Vehicle', // Reference to the Vehicle model
+    default: null, // Default to null if no vehicle is associated
   },
   createdAt: {
     type: Date,

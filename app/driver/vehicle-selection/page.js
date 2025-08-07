@@ -62,6 +62,7 @@ export default function VehicleSelectionPage() {
     }
     console.log("Selected Vehicle Type:", selectedVehicleType);
     alert(`You selected: ${selectedVehicleType.toUpperCase()}. Proceeding to next step (simulated).`);
+    router.push(`/driver/vehicle-details?page=vehicle&type=${selectedVehicleType}`); // Navigate to vehicle details page with selected type
   };
 
   const filteredVehicleTypes = vehicleTypes.filter(
