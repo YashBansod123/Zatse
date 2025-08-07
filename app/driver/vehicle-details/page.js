@@ -57,9 +57,10 @@ export default function VehicleDetailsPage() {
 
       const result = await res.json();
       if (result.success) {
-        alert("Vehicle details submitted successfully!");
-        console.log("Submitted Vehicle Data:", result.vehicle);
-      } else {
+      alert("Vehicle details submitted successfully!");
+      console.log("Submitted Vehicle Data:", result.vehicle);
+      router.push(`/driver/document-upload?type=${vehicleType}`); // Navigate to the next step
+    }else {
         alert(`Error: ${result.error}`);
         console.error("Server error:", result.error);
       }
@@ -67,6 +68,12 @@ export default function VehicleDetailsPage() {
       alert("A network error occurred. Please try again.");
       console.error("Network error:", error);
     }
+
+    // Clear form fields after successful submission
+    setVehicleMake('');
+    setVehicleModel('');
+    setLicensePlate('');
+    setVehicleColor('');
   };
 
   return (
