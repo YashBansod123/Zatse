@@ -3,9 +3,14 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema({
   phone: {
     type: String,
-    required: true,
     unique: true,
+    sparse: true,
     trim: true,
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true,
   },
   firstName: {
     type: String,
@@ -34,11 +39,11 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Document',
   }],
-  // 👉 NEW: Add a role field
+  // 👉 NEW: Change role to an array of strings
   role: {
-    type: String,
+    type: [String], // This is the key change
     enum: ['rider', 'pending_driver', 'driver', 'admin'],
-    default: 'rider', // Default role for new users
+    default: ['rider'], // Default role is now an array with one value
   },
   createdAt: {
     type: Date,
@@ -47,5 +52,6 @@ const UserSchema = new mongoose.Schema({
 });
 
 UserSchema.index({ phone: 1 });
+UserSchema.index({ googleId: 1 });
 
 module.exports = mongoose.model('User', UserSchema);
