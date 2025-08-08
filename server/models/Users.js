@@ -39,11 +39,16 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Document',
   }],
-  // 👉 NEW: Change role to an array of strings
   role: {
-    type: [String], // This is the key change
+    type: [String],
     enum: ['rider', 'pending_driver', 'driver', 'admin'],
-    default: ['rider'], // Default role is now an array with one value
+    default: ['rider'],
+  },
+  // 👉 NEW: Add a status field to track online/offline status
+  status: {
+    type: String,
+    enum: ['offline', 'online', 'on_trip'],
+    default: 'offline',
   },
   createdAt: {
     type: Date,

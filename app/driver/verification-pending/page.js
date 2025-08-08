@@ -34,8 +34,24 @@ export default function VerificationStatusPage() {
         }
         const data = await res.json();
         if (data.success && data.user) {
-          setUser(data.user); // Update with the latest data from the server
-          localStorage.setItem('currentUser', JSON.stringify(data.user)); // Keep localStorage in sync
+          // FIX: Added a check to handle both string and array roles
+          let isDriver = false;
+          if (Array.isArray(data.user.role)) {
+            // Correct way: Check if the 'driver' role is in the array
+            isDriver = data.user.role.includes('driver');
+          } else if (typeof data.user.role === 'string') {
+            // Robust check for an incorrectly stored string role
+            isDriver = data.user.role.includes('driver') && data.user.role.includes('admin');
+          }
+          
+          if (isDriver) {
+            // User is a driver, redirect to dashboard
+            router.push('/driver/dashboard');
+          } else {
+            // User is still pending, update local state
+            setUser(data.user);
+            localStorage.setItem('currentUser', JSON.stringify(data.user));
+          }
         } else {
           throw new Error('User data not found.');
         }
@@ -65,29 +81,6 @@ export default function VerificationStatusPage() {
         <div className="flex flex-col items-center justify-center space-y-4 text-red-500">
           <CircleOff className="w-12 h-12" />
           <p className="text-xl">An error occurred: {error}</p>
-        </div>
-      );
-    }
-    
-    if (user && user.role === 'driver') {
-      return (
-        <div className="flex flex-col items-center justify-center space-y-4">
-          <CheckCircle2 className="w-16 h-16 text-green-500" />
-          <ShinyText
-            text="Congratulations!"
-            disabled={false}
-            speed={2}
-            className="text-4xl md:text-5xl font-bold text-green-500"
-          />
-          <p className="text-xl text-gray-700 dark:text-gray-300">
-            Your documents have been verified. You can now start accepting rides!
-          </p>
-          <button
-            onClick={() => router.push('/driver/dashboard')} // Navigate to the driver dashboard
-            className="mt-6 bg-yellow-500 text-black py-3 px-8 rounded-full font-semibold text-lg hover:bg-yellow-600 transition"
-          >
-            Go to Driver Dashboard
-          </button>
         </div>
       );
     }

@@ -11,30 +11,32 @@ export default function DriverDashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   useEffect(() => {
-    // Function to check if the user is a verified driver
     const checkDriverStatus = async () => {
       const storedUser = localStorage.getItem('currentUser');
       if (!storedUser) {
-        // Redirect to login if no user is found
         router.push('/login');
         return;
       }
       
       const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser); // Set initial user from localStorage
+      setUser(parsedUser);
       
       try {
-        // Fetch the latest user data from the server
         const res = await fetch(`http://localhost:5000/api/user/me?phone=${parsedUser.phone}`);
         const data = await res.json();
         
-        if (data.success && data.user && data.user.role === 'driver') {
-          setUser(data.user); // Update with the latest data
-          localStorage.setItem('currentUser', JSON.stringify(data.user)); // Keep localStorage in sync
+        // FIX: Added a check to handle both string and array roles
+        const isDriver = data.user.role === 'driver' || (Array.isArray(data.user.role) && data.user.role.includes('driver'));
+
+        if (data.success && data.user && isDriver) {
+          setUser(data.user);
+          localStorage.setItem('currentUser', JSON.stringify(data.user));
+          setIsOnline(data.user.status === 'online');
         } else {
-          // If not a verified driver, redirect them to the pending page
           router.push('/driver/verification-pending');
         }
       } catch (err) {
@@ -47,6 +49,34 @@ export default function DriverDashboardPage() {
     
     checkDriverStatus();
   }, [router]);
+
+  const handleStatusChange = async () => {
+    setStatusUpdating(true);
+    const newStatus = isOnline ? 'offline' : 'online';
+    
+    try {
+      const res = await fetch('http://localhost:5000/api/driver/status', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user._id,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      
+      const result = await res.json();
+      if (result.success) {
+        setIsOnline(newStatus === 'online');
+        alert(result.message);
+      } else {
+        alert(`Failed to update status: ${result.error}`);
+      }
+    } catch (err) {
+      alert("A network error occurred. Please try again.");
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -75,7 +105,7 @@ export default function DriverDashboardPage() {
   }
 
   if (!user) {
-    return null; // Should be handled by the redirect above
+    return null;
   }
 
   return (
@@ -111,8 +141,21 @@ export default function DriverDashboardPage() {
           <p className="text-lg text-gray-700 dark:text-gray-300 mb-8">
             Your profile has been fully verified. Go online now to start accepting ride requests.
           </p>
-          <button className="bg-green-600 text-white py-4 px-8 rounded-full font-semibold text-xl hover:bg-green-700 transition transform hover:scale-105 shadow-lg">
-            Go Online
+          <button
+            onClick={handleStatusChange}
+            disabled={statusUpdating}
+            className={`w-full py-4 px-8 rounded-full font-semibold text-xl transition transform hover:scale-105 shadow-lg
+              ${isOnline
+                ? 'bg-red-600 text-white hover:bg-red-700'
+                : 'bg-green-600 text-white hover:bg-green-700'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {statusUpdating ? (
+              <span className="flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                Updating...
+              </span>
+            ) : isOnline ? 'Go Offline' : 'Go Online'}
           </button>
         </div>
       </div>

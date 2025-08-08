@@ -24,7 +24,8 @@ const verifyPhoneRoutes = require('./route/auth/verifyPhone');
 const userRoutes = require('./route/api/user');
 const vehicleRoutes = require('./route/api/vehicle');
 const documentRoutes = require('./route/api/document');
-const adminRoutes = require('./route/api/admin'); // New: Import admin route
+const adminRoutes = require('./route/api/admin');
+const driverRoutes = require('./route/api/driver');
 
 // Mount routes
 app.use('/auth', authLoginRoutes);
@@ -32,7 +33,8 @@ app.use('/api', verifyPhoneRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/vehicle', vehicleRoutes);
 app.use('/api/document', documentRoutes);
-app.use('/api/admin', adminRoutes); // New: Mount admin route
+app.use('/api/admin', adminRoutes); // Correctly mounts your single admin route
+app.use('/api/driver', driverRoutes);
 
 // Simple root route to confirm API is running
 app.get('/', (req, res) => {
