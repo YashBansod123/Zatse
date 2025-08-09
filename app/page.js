@@ -1,20 +1,17 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import ShinyText from "../components/ShinyText";
+import ShinyText from "../components/ShinyText"; // correct path as needed
 import "./globals.css";
 import LightRays from "../components/LightRays";
-import Navbar from "../components/Navbar";
+import Navbar from "../components/Navbar"; // Assuming Navbar is used here
 import dynamic from "next/dynamic";
 
 // Dynamically import MapComponent
-// HomePage.js should ONLY import the dynamic wrapper for MapComponent
 const DynamicMapComponent = dynamic(
   () => import("../components/MapComponent"),
   { ssr: false } // Crucial: This component will not be rendered on the server
 );
-
-// Removed ALL_LOCATIONS as we will fetch dynamically
 
 export default function HomePage() {
   const [pickupLocation, setPickupLocation] = useState(null);
@@ -26,13 +23,14 @@ export default function HomePage() {
   const [dropoffLocationText, setDropoffLocationText] = useState("");
   const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
   const [showDropoffSuggestions, setShowDropoffSuggestions] = useState(false);
+  
+  const [onlineDrivers, setOnlineDrivers] = useState([]);
 
   const [activeLocationInput, setActiveLocationInput] = useState('pickup');
 
   const pickupInputRef = useRef(null);
   const dropoffInputRef = useRef(null);
 
-  // Debounce function (reusable)
   const debounce = (func, delay) => {
     let timeout;
     return function(...args) {
@@ -42,56 +40,57 @@ export default function HomePage() {
     };
   };
 
-  // Function to perform geocoding search
   const performSearch = useCallback(async (query, setSuggestions, currentLocation = null) => {
-    if (query.length < 3) { // Only search if query is at least 3 characters
+    if (query.length < 3) {
       setSuggestions([]);
       return;
     }
     try {
-      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=in`;
+      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=in&addressdetails=1`;
 
-      // If a current location is available, add viewbox parameters for prioritization
       if (currentLocation && typeof currentLocation.lat === 'number' && typeof currentLocation.lng === 'number') {
-        // Create a small bounding box around the current location for prioritization
-        // Adjust these values (e.g., 0.1) to control the size of the prioritization area
-        const delta = 0.1; // Approximately 11km for lat/lng
+        const delta = 0.1;
         const minLat = currentLocation.lat - delta;
         const maxLat = currentLocation.lat + delta;
         const minLng = currentLocation.lng - delta;
         const maxLng = currentLocation.lng + delta;
-        // Nominatim viewbox format: min_lon,min_lat,max_lon,max_lat
         apiUrl += `&viewbox=${minLng},${minLat},${maxLng},${maxLat}`;
-        // Note: 'bounded=1' would strictly limit results to the viewbox,
-        // but often just 'viewbox' as a hint is better for suggestions.
       }
 
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Zatse-Rideshare-App'
+        }
+      });
       const data = await response.json();
       const newSuggestions = data.map(item => item.display_name);
       setSuggestions(newSuggestions);
     } catch (error) {
       console.error("Geocoding search failed:", error);
-      setSuggestions([]); // Clear suggestions on error
+      setSuggestions([]);
     }
   }, []);
 
-  // Helper for debounced search, wraps performSearch
-  // MOVED THIS DECLARATION UP
   const debouncedSearch = useCallback(debounce(performSearch, 500), [performSearch]);
-
-  // Debounced versions of the search functions
-  // Now debouncedSearch is defined before these use it
   const debouncedPickupSearch = useCallback((query, setSuggestions) => {
     debouncedSearch(query, setSuggestions, pickupLocation);
-  }, [debouncedSearch, pickupLocation]); // Depend on debouncedSearch
-
+  }, [debouncedSearch, pickupLocation]);
   const debouncedDropoffSearch = useCallback((query, setSuggestions) => {
     debouncedSearch(query, setSuggestions, pickupLocation);
-  }, [debouncedSearch, pickupLocation]); // Depend on debouncedSearch
+  }, [debouncedSearch, pickupLocation]);
 
+  const fetchOnlineDrivers = async () => {
+    try {
+      const res = await fetch('http://localhost:5000/api/driver/online');
+      const data = await res.json();
+      if (data.success && data.drivers) {
+        setOnlineDrivers(data.drivers);
+      }
+    } catch (error) {
+      console.error("Failed to fetch online drivers:", error);
+    }
+  };
 
-  // Unified function to handle location selection from map/geolocation
   const handleLocationSelectedFromMap = async (type, location) => {
     let latLng = null;
     if (Array.isArray(location)) {
@@ -105,8 +104,9 @@ export default function HomePage() {
 
     let addressText = `Lat: ${latLng.lat.toFixed(4)}, Lng: ${latLng.lng.toFixed(4)}`;
     try {
-      // Added countrycodes=in for reverse geocoding as well, for consistency
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.lat}&lon=${latLng.lng}&zoom=18&addressdetails=1&countrycodes=in`);
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latLng.lat}&lon=${latLng.lng}&zoom=18&addressdetails=1&countrycodes=in`, {
+        headers: { 'User-Agent': 'Zatse-Rideshare-App' }
+      });
       const data = await response.json();
       if (data && data.display_name) {
         addressText = data.display_name;
@@ -124,7 +124,6 @@ export default function HomePage() {
     }
   };
 
-  // Effect to handle initial geolocation for pickup location on mount
   useEffect(() => {
     if (navigator.geolocation && !pickupLocation) {
       navigator.geolocation.getCurrentPosition(
@@ -140,18 +139,24 @@ export default function HomePage() {
     }
   }, []);
 
-  // --- Pickup Location Search Handlers ---
+  useEffect(() => {
+    fetchOnlineDrivers();
+    const intervalId = setInterval(fetchOnlineDrivers, 5000);
+    return () => clearInterval(intervalId);
+  }, []);
+
+
   const handlePickupTextChange = (e) => {
     const value = e.target.value;
     setPickupLocationText(value);
-    setPickupLocation(null); // Clear map location when typing
+    setPickupLocation(null);
 
-    debouncedPickupSearch(value, setPickupSuggestions); // Pass pickupLocation implicitly via useCallback
+    debouncedPickupSearch(value, setPickupSuggestions);
     if (value.length > 2) {
       setShowPickupSuggestions(true);
     } else {
       setShowPickupSuggestions(false);
-      setPickupSuggestions([]); // Clear suggestions immediately if query is too short
+      setPickupSuggestions([]);
       if (value.length === 0) {
         setPickupLocation(null);
       }
@@ -164,8 +169,7 @@ export default function HomePage() {
     setShowPickupSuggestions(false);
 
     try {
-      // Also add viewbox to this specific geocoding call for consistency
-      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1&countrycodes=in`;
+      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1&countrycodes=in&addressdetails=1`;
       if (pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number') {
         const delta = 0.1;
         const minLat = pickupLocation.lat - delta;
@@ -175,7 +179,9 @@ export default function HomePage() {
         apiUrl += `&viewbox=${minLng},${minLat},${maxLng},${maxLat}`;
       }
 
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, {
+        headers: { 'User-Agent': 'Zatse-Rideshare-App' }
+      });
       const data = await response.json();
       if (data && data.length > 0) {
         const latLng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
@@ -190,18 +196,17 @@ export default function HomePage() {
     }
   };
 
-  // --- Dropoff Location Search Handlers ---
   const handleDropoffTextChange = (e) => {
     const value = e.target.value;
     setDropoffLocationText(value);
-    setDropoffLocation(null); // Clear map location when typing
+    setDropoffLocation(null);
 
-    debouncedDropoffSearch(value, setDropoffSuggestions); // Pass pickupLocation implicitly via useCallback
+    debouncedDropoffSearch(value, setDropoffSuggestions);
     if (value.length > 2) {
       setShowDropoffSuggestions(true);
     } else {
       setShowDropoffSuggestions(false);
-      setDropoffSuggestions([]); // Clear suggestions immediately if query is too short
+      setDropoffSuggestions([]);
       if (value.length === 0) {
         setDropoffLocation(null);
       }
@@ -214,8 +219,7 @@ export default function HomePage() {
     setShowDropoffSuggestions(false);
 
     try {
-      // Also add viewbox to this specific geocoding call for consistency
-      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1&countrycodes=in`;
+      let apiUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(suggestion)}&limit=1&countrycodes=in&addressdetails=1`;
       if (pickupLocation && typeof pickupLocation.lat === 'number' && typeof pickupLocation.lng === 'number') {
         const delta = 0.1;
         const minLat = pickupLocation.lat - delta;
@@ -225,7 +229,9 @@ export default function HomePage() {
         apiUrl += `&viewbox=${minLng},${minLat},${maxLng},${maxLat}`;
       }
 
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl, {
+        headers: { 'User-Agent': 'Zatse-Rideshare-App' }
+      });
       const data = await response.json();
       if (data && data.length > 0) {
         const latLng = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
@@ -240,16 +246,15 @@ export default function HomePage() {
     }
   };
 
-  // Close suggestions when clicking outside the input/suggestions
+  const handleClickOutside = (event) => {
+    if (dropoffInputRef.current && !dropoffInputRef.current.contains(event.target)) {
+      setShowDropoffSuggestions(false);
+    }
+    if (pickupInputRef.current && !pickupInputRef.current.contains(event.target)) {
+      setShowPickupSuggestions(false);
+    }
+  };
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropoffInputRef.current && !dropoffInputRef.current.contains(event.target)) {
-        setShowDropoffSuggestions(false);
-      }
-      if (pickupInputRef.current && !pickupInputRef.current.contains(event.target)) {
-        setShowPickupSuggestions(false);
-      }
-    };
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -370,6 +375,7 @@ export default function HomePage() {
               activeLocationInput={activeLocationInput}
               initialPickupLocation={pickupLocation}
               initialDropoffLocation={dropoffLocation}
+              onlineDrivers={onlineDrivers} // Pass online drivers to the map
             />
           </div>
         </div>

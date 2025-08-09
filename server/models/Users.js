@@ -44,11 +44,18 @@ const UserSchema = new mongoose.Schema({
     enum: ['rider', 'pending_driver', 'driver', 'admin'],
     default: ['rider'],
   },
-  // 👉 NEW: Add a status field to track online/offline status
   status: {
     type: String,
     enum: ['offline', 'online', 'on_trip'],
     default: 'offline',
+  },
+  // 👉 NEW: Add a location field to store driver coordinates
+  location: {
+    type: {
+      latitude: { type: Number, default: 0 },
+      longitude: { type: Number, default: 0 },
+    },
+    default: null,
   },
   createdAt: {
     type: Date,

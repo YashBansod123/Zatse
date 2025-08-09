@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Import useRef
 import Navbar from "../../../components/Navbar";
 import LightRays from "../../../components/LightRays";
 import ShinyText from "../../../components/ShinyText";
@@ -14,6 +14,30 @@ export default function DriverDashboardPage() {
   const [isOnline, setIsOnline] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
 
+  const locationIntervalRef = useRef(null);
+  
+  // 👉 UPDATED: Function to send location updates to the server
+  const sendLocationUpdate = async (latitude, longitude) => {
+    if (!user || !user._id) return; // Ensure user is available before sending
+
+    try {
+      const res = await fetch('http://localhost:5000/api/driver/location', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': user._id, // Use the user ID for authentication
+        },
+        body: JSON.stringify({ latitude, longitude, userId: user._id }),
+      });
+      const result = await res.json();
+      if (!result.success) {
+        console.error("Failed to send location update:", result.error);
+      }
+    } catch (error) {
+      console.error("Network error sending location:", error);
+    }
+  };
+
   useEffect(() => {
     const checkDriverStatus = async () => {
       const storedUser = localStorage.getItem('currentUser');
@@ -21,18 +45,12 @@ export default function DriverDashboardPage() {
         router.push('/login');
         return;
       }
-      
       const parsedUser = JSON.parse(storedUser);
       setUser(parsedUser);
-      
       try {
         const res = await fetch(`http://localhost:5000/api/user/me?phone=${parsedUser.phone}`);
         const data = await res.json();
-        
-        // FIX: Added a check to handle both string and array roles
-        const isDriver = data.user.role === 'driver' || (Array.isArray(data.user.role) && data.user.role.includes('driver'));
-
-        if (data.success && data.user && isDriver) {
+        if (data.success && data.user && data.user.role.includes('driver')) {
           setUser(data.user);
           localStorage.setItem('currentUser', JSON.stringify(data.user));
           setIsOnline(data.user.status === 'online');
@@ -46,9 +64,34 @@ export default function DriverDashboardPage() {
         setLoading(false);
       }
     };
-    
     checkDriverStatus();
   }, [router]);
+
+  // useEffect to start/stop location tracking based on isOnline status
+  useEffect(() => {
+    if (isOnline && navigator.geolocation) {
+      locationIntervalRef.current = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            sendLocationUpdate(position.coords.latitude, position.coords.longitude);
+          },
+          (error) => {
+            console.error("Geolocation error:", error);
+          }
+        );
+      }, 5000); // Send update every 5 seconds
+    } else {
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+      }
+    };
+  }, [isOnline, user]); // Depend on isOnline and user
 
   const handleStatusChange = async () => {
     setStatusUpdating(true);

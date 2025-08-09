@@ -3,9 +3,7 @@ const router = express.Router();
 const User = require('../../models/Users');
 
 // This is a placeholder for a real authentication middleware
-// It would verify a JWT token and attach the user object to the request
 const authMiddleware = async (req, res, next) => {
-    // For this example, we'll assume a userId is sent in the body or headers
     const userId = req.body.userId || req.headers['x-user-id'];
 
     if (!userId) {
@@ -29,12 +27,10 @@ router.put('/status', authMiddleware, async (req, res) => {
     const { status } = req.body;
     const user = req.user;
 
-    // Check if the user has the 'driver' role
     if (!user.role.includes('driver')) {
         return res.status(403).json({ success: false, error: 'Forbidden: Only verified drivers can change their status.' });
     }
 
-    // Validate the new status
     if (!['online', 'offline'].includes(status)) {
         return res.status(400).json({ success: false, error: 'Invalid status provided. Must be "online" or "offline".' });
     }
@@ -46,6 +42,39 @@ router.put('/status', authMiddleware, async (req, res) => {
     } catch (err) {
         console.error('Error updating driver status:', err);
         res.status(500).json({ success: false, error: 'Server error updating driver status.' });
+    }
+});
+
+// PUT /api/driver/location - Updates the driver's real-time location
+router.put('/location', authMiddleware, async (req, res) => {
+    const { latitude, longitude } = req.body;
+    const user = req.user;
+
+    if (!user.role.includes('driver')) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Only verified drivers can update their location.' });
+    }
+
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+        return res.status(400).json({ success: false, error: 'Invalid coordinates provided.' });
+    }
+
+    try {
+        user.location = { latitude, longitude };
+        await user.save();
+        res.status(200).json({ success: true, message: 'Driver location updated.' });
+    } catch (err) {
+        console.error('Error updating driver location:', err);
+        res.status(500).json({ success: false, error: 'Server error updating driver location.' });
+    }
+});
+
+// 👉 NEW: GET /api/driver/online - Get the location of all online drivers
+router.get('/online', async (req, res) => {
+    try {
+        const onlineDrivers = await User.find({ status: 'online' }).select('_id firstName location');
+        res.status(200).json({ success: true, drivers: onlineDrivers });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Server error fetching online drivers.' });
     }
 });
 

@@ -27,6 +27,7 @@ const documentRoutes = require('./route/api/document');
 const adminRoutes = require('./route/api/admin');
 const driverRoutes = require('./route/api/driver');
 
+
 // Mount routes
 app.use('/auth', authLoginRoutes);
 app.use('/api', verifyPhoneRoutes);
