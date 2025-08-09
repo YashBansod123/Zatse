@@ -124,8 +124,9 @@ export default function HomePage() {
     }
   };
 
+  // FIX: This useEffect now sets a default location if geolocation fails or is not supported
   useEffect(() => {
-    if (navigator.geolocation && !pickupLocation) {
+    if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const newLocation = { lat: position.coords.latitude, lng: position.coords.longitude };
@@ -134,8 +135,14 @@ export default function HomePage() {
         (error) => {
           console.error("Geolocation error:", error);
           setPickupLocationText("Getting current location or click on map...");
+          // Fallback to a predefined location if geolocation fails
+          handleLocationSelectedFromMap('pickup', { lat: 21.2514, lng: 81.6296 });
         }
       );
+    } else {
+      setPickupLocationText("Geolocation is not supported by your browser.");
+      // Fallback to a predefined location if geolocation is not supported
+      handleLocationSelectedFromMap('pickup', { lat: 21.2514, lng: 81.6296 });
     }
   }, []);
 
@@ -375,7 +382,7 @@ export default function HomePage() {
               activeLocationInput={activeLocationInput}
               initialPickupLocation={pickupLocation}
               initialDropoffLocation={dropoffLocation}
-              onlineDrivers={onlineDrivers} // Pass online drivers to the map
+              onlineDrivers={onlineDrivers}
             />
           </div>
         </div>
