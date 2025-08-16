@@ -39,17 +39,19 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Document',
   }],
+  // The 'role' field is correctly an array of strings
   role: {
     type: [String],
     enum: ['rider', 'pending_driver', 'driver', 'admin'],
     default: ['rider'],
   },
+  // The 'status' field is correctly defined for drivers
   status: {
     type: String,
     enum: ['offline', 'online', 'on_trip'],
     default: 'offline',
   },
-  // 👉 NEW: Add a location field to store driver coordinates
+  // The 'location' field is correctly defined for real-time updates
   location: {
     type: {
       latitude: { type: Number, default: 0 },

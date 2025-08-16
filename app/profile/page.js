@@ -1,8 +1,11 @@
-'use client';
+"use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Navbar from '@/components/Navbar';
+import LightRays from '@/components/LightRays';
+
 export default function ProfilePage() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -10,76 +13,86 @@ export default function ProfilePage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [message, setMessage] = useState(''); // For form messages
-
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [message, setMessage] = useState('');
+  
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       setLoading(true);
-      setMessage(''); // Clear messages on load
-      const storedUser = localStorage.getItem('currentUser');
-
-      if (!storedUser) {
-        router.push('/login'); // No user in localStorage, redirect to login
-        return;
-      }
-
-      const parsedUser = JSON.parse(storedUser);
-      setUser(parsedUser); // Set initial user from localStorage
-
-      try {
-        // Fetch the most up-to-date user data from the server
-        const res = await fetch(`http://localhost:5000/api/user/me?phone=${parsedUser.phone}`, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (!res.ok) {
-          // Handle cases where user might not be found on server or other errors
-          localStorage.removeItem('currentUser'); // Clear stale data
+      setMessage('');
+      
+      const userIdFromUrl = searchParams.get('userId');
+      let storedUser = localStorage.getItem('currentUser');
+      let userToFetch = null;
+      
+      if (userIdFromUrl && !storedUser) {
+        try {
+          const res = await fetch(`http://localhost:5000/api/user/me?userId=${userIdFromUrl}`);
+          if (!res.ok) {
+            throw new Error('Failed to fetch user profile by ID.');
+          }
+          const data = await res.json();
+          if (data.success && data.user) {
+            userToFetch = data.user;
+          } else {
+            throw new Error('User data not found.');
+          }
+        } catch (err) {
+          console.error('Error fetching user from URL ID:', err);
           router.push('/login');
           return;
         }
-
+      } else if (storedUser) {
+        userToFetch = JSON.parse(storedUser);
+      } else {
+        router.push('/login');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`http://localhost:5000/api/user/me?userId=${userToFetch._id}`);
+        if (!res.ok) {
+          throw new Error('Failed to fetch user profile.');
+        }
         const data = await res.json();
         if (data.success && data.user) {
           const fetchedUser = data.user;
-          setUser(fetchedUser); // Update state with fresh data
-          localStorage.setItem('currentUser', JSON.stringify(fetchedUser)); // Update localStorage
-
-          // Check if profile needs completion
-          if (!fetchedUser.firstName || !fetchedUser.lastName || !fetchedUser.email) {
+          setUser(fetchedUser);
+          localStorage.setItem('currentUser', JSON.stringify(fetchedUser));
+          
+          if (!fetchedUser.firstName || !fetchedUser.lastName || !fetchedUser.email || !fetchedUser.phone) {
             setNeedsCompletion(true);
             setFirstName(fetchedUser.firstName || '');
             setLastName(fetchedUser.lastName || '');
             setEmail(fetchedUser.email || '');
+            setPhoneNumber(fetchedUser.phone || '');
           } else {
             setNeedsCompletion(false);
           }
         } else {
-          // If server indicates failure, treat as unauthenticated
-          localStorage.removeItem('currentUser');
-          router.push('/login');
+          throw new Error('User data not found.');
         }
       } catch (err) {
         console.error('Error fetching user profile from server:', err);
         setMessage('Failed to load profile. Please try again.');
-        localStorage.removeItem('currentUser'); // Clear potentially bad data
+        localStorage.removeItem('currentUser');
         router.push('/login');
       } finally {
         setLoading(false);
       }
     };
-
+    
     fetchUserProfile();
-  }, [router]);
+  }, [router, searchParams]);
 
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
-    setMessage(''); // Clear previous messages
+    setMessage('');
 
-    if (!firstName || !lastName || !email) {
+    if (!firstName || !lastName || !email || !phoneNumber) {
       setMessage('Please fill in all required fields.');
       return;
     }
@@ -89,10 +102,11 @@ export default function ProfilePage() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone: user.phone, // Use the phone from the current user state
+          userId: user._id, // Pass userId for server-side lookup
           firstName,
           lastName,
           email,
+          phone: phoneNumber,
         }),
       });
 
@@ -105,9 +119,9 @@ export default function ProfilePage() {
       const data = await res.json();
       if (data.success && data.user) {
         setMessage('Profile updated successfully! ✅');
-        setUser(data.user); // Update local state with new user data
-        localStorage.setItem('currentUser', JSON.stringify(data.user)); // Update localStorage
-        setNeedsCompletion(false); // No longer needs completion
+        setUser(data.user);
+        localStorage.setItem('currentUser', JSON.stringify(data.user));
+        setNeedsCompletion(false);
       } else {
         setMessage(data.error || 'Failed to update profile.');
       }
@@ -131,18 +145,17 @@ export default function ProfilePage() {
   }
 
   if (!user) {
-    // This case should ideally be handled by the redirect in useEffect
     return null;
   }
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 px-4">
-      <div className="w-full mt-20 max-w-md p-8 rounded-xl shadow-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">
+      <div className="w-full max-w-md p-8 rounded-xl shadow-md bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200">
         {needsCompletion ? (
           <>
             <h1 className="text-2xl font-bold text-center mb-6">Complete Your Profile</h1>
             <p className="text-center text-gray-600 dark:text-gray-400 mb-4">
-              Please provide your full name and email to continue.
+              Please provide your full name, email, and phone number to continue.
             </p>
             <form onSubmit={handleProfileUpdate} className="space-y-4">
               <div>
@@ -180,6 +193,19 @@ export default function ProfilePage() {
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-700 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                  Phone Number:
+                </label>
+                <input
+                  type="tel"
+                  id="phoneNumber"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
                   className="mt-1 p-3 border border-gray-300 dark:border-gray-700 rounded-md bg-gray-50 dark:bg-gray-700 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                   required
                 />
@@ -230,17 +256,19 @@ export default function ProfilePage() {
           </>
         )}
 
+        <Link href="/">
+          <button
+            className="w-full mt-8 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition"
+          >
+            Go Back to Homepage
+          </button>
+        </Link>
         <button
           onClick={handleLogout}
           className="w-full mt-8 bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition"
         >
           Logout
         </button>
-        <div className="mt-4 text-center">
-          <Link href="/" className="text-blue-600 hover:underline">
-            Back to Home
-          </Link>
-        </div>
       </div>
     </main>
   );

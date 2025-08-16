@@ -1,20 +1,25 @@
 const express = require('express');
 const router = express.Router();
-const User = require('../../models/Users'); // Adjust path if necessary
+const User = require('../../models/Users');
 
 // GET /api/user/me - Fetch current user's profile
+// Now supports fetching by both phone and userId
 router.get('/me', async (req, res) => {
-  // We'll pass the phone number as a query parameter or in headers from the client
-  // For simplicity, let's assume phone is passed as a query param for now.
-  // In a real app, you'd use an authentication token to identify the user.
-  const { phone } = req.query;
+  const { phone, userId } = req.query; // Get both from query params
 
-  if (!phone) {
-    return res.status(400).json({ success: false, error: 'Phone number is required to fetch user data.' });
+  // Check if either phone or userId is provided
+  if (!phone && !userId) {
+    return res.status(400).json({ success: false, error: 'Phone number or User ID is required to fetch user data.' });
   }
 
   try {
-    const user = await User.findOne({ phone }).select('-__v'); // Exclude __v field
+    let user;
+    if (userId) {
+        user = await User.findById(userId).select('-__v'); // Find user by ID
+    } else {
+        user = await User.findOne({ phone }).select('-__v'); // Find user by phone
+    }
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -27,14 +32,21 @@ router.get('/me', async (req, res) => {
 
 // PUT /api/user/me - Update current user's profile (firstName, lastName, email)
 router.put('/me', async (req, res) => {
-  const { phone, firstName, lastName, email } = req.body;
+  const { phone, userId, firstName, lastName, email } = req.body;
 
-  if (!phone) {
-    return res.status(400).json({ success: false, error: 'Phone number is required to update user data.' });
+  // Check if either phone or userId is provided
+  if (!phone && !userId) {
+    return res.status(400).json({ success: false, error: 'Phone number or User ID is required to update user data.' });
   }
 
   try {
-    const user = await User.findOne({ phone });
+    let user;
+    if (userId) {
+        user = await User.findById(userId);
+    } else {
+        user = await User.findOne({ phone });
+    }
+    
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found for update.' });
@@ -44,13 +56,13 @@ router.put('/me', async (req, res) => {
     if (firstName !== undefined) user.firstName = firstName;
     if (lastName !== undefined) user.lastName = lastName;
     if (email !== undefined) user.email = email;
+    if (phone !== undefined) user.phone = phone;
 
     await user.save(); // Save the updated user
 
     res.status(200).json({ success: true, message: 'Profile updated successfully!', user: user });
   } catch (err) {
     console.error('Error updating user profile:', err);
-    // Handle potential duplicate email error specifically
     if (err.code === 11000 && err.keyPattern && err.keyPattern.email) {
       return res.status(409).json({ success: false, error: 'Email already exists.' });
     }

@@ -1,24 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from 'next/navigation';
 import PhoneInput from "react-phone-input-2";
-import 'react-phone-input-2/lib/style.css'; // Required for proper styling
+import 'react-phone-input-2/lib/style.css';
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 
 export default function LoginPage() {
   const [value, setValue] = useState('');
-  const [message, setMessage] = useState(''); // State for displaying messages
+  const [message, setMessage] = useState('');
+  const router = useRouter();
+
+  // New useEffect to check for an existing user session
+  useEffect(() => {
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser);
+        if (user && user._id) {
+          // FIX: Redirect to the correct profile page
+          router.push('/profile');
+        }
+      } catch (e) {
+        console.error("Failed to parse user from localStorage:", e);
+        localStorage.removeItem("currentUser");
+      }
+    }
+  }, [router]);
 
   const handleContinue = async () => {
     if (!value) {
       setMessage('Please enter a phone number.');
       return;
     }
-    setMessage(''); // Clear previous messages
+    setMessage('');
 
     try {
-      // 1. Create or find user (using the correct /auth/login endpoint)
       const loginRes = await fetch('http://localhost:5000/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -30,9 +48,8 @@ export default function LoginPage() {
         setMessage(`Login/User creation failed: ${errorData.error || 'Unknown error'}`);
         return;
       }
-      console.log("User login/creation successful."); // Log success for user part
+      console.log("User login/creation successful.");
 
-      // 2. Send OTP (using the correct /api/send-otp endpoint)
       const otpRes = await fetch('http://localhost:5000/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -47,8 +64,6 @@ export default function LoginPage() {
 
       const data = await otpRes.json();
       if (data.success) {
-        // 3. Redirect to OTP page
-        // Ensure your Next.js app has a page at /verify-otp that uses app/verify-opt.js
         window.location.href = `/verify-otp?phone=${value}`;
       } else {
         setMessage(data.error || "Failed to send OTP ❌");
@@ -57,6 +72,10 @@ export default function LoginPage() {
       console.error("Server error ❌", err);
       setMessage("A server error occurred. Please try again later.");
     }
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.href = 'http://localhost:5000/auth/google';
   };
 
   return (
@@ -103,7 +122,10 @@ export default function LoginPage() {
           <hr className="flex-grow border-gray-300 dark:border-gray-600" />
         </div>
 
-        <button className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 dark:border-gray-700 dark:bg-gray-800 py-3 rounded-lg font-medium text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition mb-3">
+        <button
+          onClick={handleGoogleLogin}
+          className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 dark:border-gray-700 dark:bg-gray-800 py-3 rounded-lg font-medium text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition mb-3"
+        >
           <FcGoogle className="text-xl" /> Continue with Google
         </button>
 
