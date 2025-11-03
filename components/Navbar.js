@@ -1,20 +1,28 @@
 'use client';
 
 import Link from "next/link";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Sun, User, Car, Shield, ChevronDown } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from 'next/navigation';
-import { User, Car, Shield, ChevronDown } from 'lucide-react'; // Added icons for roles
 
 export default function Navbar() {
   const [theme, setTheme] = useState("light");
   const [isMounted, setIsMounted] = useState(false);
   const [user, setUser] = useState(null);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [showRoleDropdown, setShowRoleDropdown] = useState(false); // New state for role dropdown
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false); 
 
   const router = useRouter();
   const dropdownRef = useRef(null);
+
+  // Helper to check if a role exists in the user's role array
+  const userHasRole = (roleToCheck) => {
+    if (!user || !user.role) return false;
+    // Handle both array (correct) and string (legacy/error) roles for resilience
+    return Array.isArray(user.role)
+      ? user.role.includes(roleToCheck)
+      : user.role.toString().includes(roleToCheck); 
+  };
 
   const ROLES = [
     { name: 'Rider', role: 'rider', icon: <User className="w-4 h-4 mr-2" /> },
@@ -77,7 +85,9 @@ export default function Navbar() {
 
   const switchRole = (newRole) => {
     if (user) {
-      const updatedUser = { ...user, role: newRole };
+      // NOTE: For demo purposes, we update the local user role.
+      // In a production app, the server would handle role switching and issue a new token.
+      const updatedUser = { ...user, role: [newRole] }; // For switching, we set a single role for demonstration
       setUser(updatedUser);
       localStorage.setItem('currentUser', JSON.stringify(updatedUser));
       setShowRoleDropdown(false);
@@ -120,30 +130,49 @@ export default function Navbar() {
         {user ? (
           <div className="flex items-center gap-4">
             {/* Role Switch Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
-              >
-                <span className="text-sm">
-                  {ROLES.find(r => r.role === user.role)?.name || 'Role'}
-                </span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${showRoleDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              {showRoleDropdown && (
-                <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-20 border border-gray-200 dark:border-gray-700">
-                  {ROLES.map(role => (
-                    <button
-                      key={role.role}
-                      onClick={() => switchRole(role.role)}
-                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      {role.icon} {role.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Show this dropdown ONLY if the user has more than one potential role OR is a driver/admin */}
+            {(userHasRole('admin') || userHasRole('driver')) && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowRoleDropdown(!showRoleDropdown)}
+                  className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                >
+                  <span className="text-sm font-semibold">
+                    {/* Display the current primary role */}
+                    {userHasRole('admin') ? 'Admin' : userHasRole('driver') ? 'Driver' : 'Rider'}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showRoleDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showRoleDropdown && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-20 border border-gray-200 dark:border-gray-700">
+                    {userHasRole('rider') && (
+                        <button
+                          onClick={() => switchRole('rider')}
+                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                            <User className="w-4 h-4 mr-2" /> Rider
+                        </button>
+                    )}
+                    {userHasRole('driver') && (
+                        <button
+                          onClick={() => switchRole('driver')}
+                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                            <Car className="w-4 h-4 mr-2" /> Driver
+                        </button>
+                    )}
+                    {userHasRole('admin') && (
+                        <button
+                          onClick={() => switchRole('admin')}
+                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                            <Shield className="w-4 h-4 mr-2" /> Admin
+                        </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Profile Dropdown */}
             <div className="relative">
@@ -158,7 +187,7 @@ export default function Navbar() {
                   onError={(e) => { e.target.onerror = null; e.target.src = 'https://placehold.co/32x32/cccccc/ffffff?text=U'; }}
                 />
                 <span className="hidden sm:inline text-sm">
-                  {user.firstName || user.phone.slice(-4)}
+                  {user.firstName || user.phone?.slice(-4) || 'User'}
                 </span>
                 <ChevronDown className={`w-4 h-4 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
               </button>
@@ -172,6 +201,29 @@ export default function Navbar() {
                   >
                     My Profile
                   </Link>
+                  
+                  {/* Driver Dashboard Link */}
+                  {userHasRole('driver') && (
+                    <Link
+                      href="/driver/vehicle-management"
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => setShowProfileDropdown(false)}
+                    >
+                      <Car className="w-4 h-4 mr-2 inline-block" /> Driver Dashboard
+                    </Link>
+                  )}
+
+                  {/* Admin Dashboard Link */}
+                  {userHasRole('admin') && (
+                    <Link
+                      href="/admin/dashboard"
+                      className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => setShowProfileDropdown(false)}
+                    >
+                      <Shield className="w-4 h-4 mr-2 inline-block" /> Admin Dashboard
+                    </Link>
+                  )}
+                  
                   <button
                     onClick={handleLogout}
                     className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
